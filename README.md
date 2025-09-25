@@ -11,7 +11,7 @@ This repository contains a working Template Export/Import system and a REST API 
 Terminal A (API server on port 4000):
 
 ```bash
-cd canva-editor/api
+cd api
 npm install
 npm start
 ```
@@ -19,7 +19,6 @@ npm start
 Terminal B (Vite dev server on port 5173):
 
 ```bash
-cd canva-editor
 npm install
 npm run dev
 ```
