@@ -1,6 +1,5 @@
 ---
-# Template Export/Import System and API (Job Assessment Guide)
-
+# Template Export/Import System and API
 This repository contains a working Template Export/Import system and a REST API to manage templates and parameterized rendering. Use this guide to build locally, run demos, and explain the implementation during interviews.
 
 ## Quick Start
