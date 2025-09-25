@@ -58,7 +58,7 @@ Visit the app at: http://localhost:5173
 
 ## Running the Automated Tests
 
-With the API running on port 4000, from `canva-editor/` run:
+With the API running on port 4000, from `/api` run:
 
 ```bash
 npm install axios
