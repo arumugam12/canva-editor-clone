@@ -1,0 +1,147 @@
+{
+  "name": "Sample Template with Parameters",
+  "description": "A sample template demonstrating text and image parameter substitution",
+  "thumbnail": "https://canva-editor-api.vercel.app/images/templates/sample.png",
+  "pages": [
+    {
+      "name": "",
+      "notes": "",
+      "layers": {
+        "ROOT": {
+          "type": {
+            "resolvedName": "RootLayer"
+          },
+          "props": {
+            "boxSize": {
+              "width": 900,
+              "height": 900
+            },
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "rotate": 0,
+            "color": "rgb(255, 255, 255)",
+            "image": null,
+            "gradientBackground": null
+          },
+          "locked": false,
+          "child": ["textLayer1", "textLayer2", "imageLayer1"],
+          "parent": null
+        },
+        "textLayer1": {
+          "type": {
+            "resolvedName": "TextLayer"
+          },
+          "props": {
+            "position": {
+              "x": 100,
+              "y": 200
+            },
+            "boxSize": {
+              "width": 700,
+              "height": 100
+            },
+            "rotate": 0,
+            "scale": 1,
+            "text": "<p style=\"text-align: center;font-family: 'Arial';font-size: 48px;color: rgb(0, 0, 0);line-height: 1.4;letter-spacing: normal;\"><strong><span style=\"color: rgb(0, 0, 0);\">{{title}}</span></strong></p>",
+            "fonts": [
+              {
+                "family": "Arial",
+                "name": "Arial Regular",
+                "url": "https://fonts.gstatic.com/s/arial/v1/arial.woff2",
+                "style": "regular",
+                "styles": []
+              }
+            ],
+            "colors": ["rgb(0, 0, 0)"],
+            "fontSizes": [48],
+            "effect": null,
+            "settings": 1
+          },
+          "locked": false,
+          "child": [],
+          "parent": "ROOT"
+        },
+        "textLayer2": {
+          "type": {
+            "resolvedName": "TextLayer"
+          },
+          "props": {
+            "position": {
+              "x": 100,
+              "y": 350
+            },
+            "boxSize": {
+              "width": 700,
+              "height": 100
+            },
+            "rotate": 0,
+            "scale": 1,
+            "text": "<p style=\"text-align: center;font-family: 'Arial';font-size: 32px;color: rgb(100, 100, 100);line-height: 1.4;letter-spacing: normal;\"><span style=\"color: rgb(100, 100, 100);\">{{subtitle}}</span></p>",
+            "fonts": [
+              {
+                "family": "Arial",
+                "name": "Arial Regular",
+                "url": "https://fonts.gstatic.com/s/arial/v1/arial.woff2",
+                "style": "regular",
+                "styles": []
+              }
+            ],
+            "colors": ["rgb(100, 100, 100)"],
+            "fontSizes": [32],
+            "effect": null,
+            "settings": 1
+          },
+          "locked": false,
+          "child": [],
+          "parent": "ROOT"
+        },
+        "imageLayer1": {
+          "type": {
+            "resolvedName": "ImageLayer"
+          },
+          "props": {
+            "position": {
+              "x": 200,
+              "y": 500
+            },
+            "boxSize": {
+              "width": 500,
+              "height": 300
+            },
+            "rotate": 0,
+            "scale": 1,
+            "image": {
+              "url": "{{backgroundImage}}",
+              "thumb": "{{backgroundImage}}",
+              "boxSize": {
+                "width": 500,
+                "height": 300
+              },
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "rotate": 0
+            },
+            "settings": 1
+          },
+          "locked": false,
+          "child": [],
+          "parent": "ROOT"
+        }
+      },
+      "metadata": {
+        "version": "1.0.0",
+        "createdAt": "2024-01-01T00:00:00.000Z"
+      }
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "author": "Template System",
+    "tags": ["sample", "parameterized", "demo"]
+  }
+}

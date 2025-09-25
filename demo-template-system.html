@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template System Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .demo-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .demo-section h2 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        .code-block {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .feature-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .feature-list li:before {
+            content: "✅ ";
+            color: #28a745;
+        }
+        .api-endpoint {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #2196f3;
+            margin: 10px 0;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Canva Editor Template System</h1>
+        
+        <div class="demo-section">
+            <h2>📋 Features Implemented</h2>
+            <ul class="feature-list">
+                <li>Template Export - Save current editor state as JSON</li>
+                <li>Template Import - Load templates from JSON files or URLs</li>
+                <li>Parameter Substitution - Replace text and image placeholders</li>
+                <li>Template Customization - Real-time preview of changes</li>
+                <li>API Endpoints - RESTful API for template management</li>
+                <li>React Components - Ready-to-use UI components</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔧 API Endpoints</h2>
+            
+            <div class="api-endpoint">
+                <strong>POST /api/template/export</strong>
+                <div class="code-block">
+{
+  "templateName": "My Template",
+  "description": "Template description",
+  "pages": [...],
+  "author": "Author Name",
+  "tags": ["tag1", "tag2"]
+}
+                </div>
+            </div>
+
+            <div class="api-endpoint">
+                <strong>POST /api/template/import</strong>
+                <div class="code-block">
+{
+  "templatePath": "./json/sample-template.json",
+  "textParameters": {
+    "title": "Custom Title",
+    "subtitle": "Custom Subtitle"
+  },
+  "imageParameters": {
+    "backgroundImage": "https://example.com/image.jpg"
+  }
+}
+                </div>
+            </div>
+
+            <div class="api-endpoint">
+                <strong>GET /api/template/{templateName}</strong>
+                <div class="code-block">
+GET /api/template/sample-template?textParameters={"title":"Custom Title"}&imageParameters={"backgroundImage":"https://example.com/bg.jpg"}
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>💻 Usage Examples</h2>
+            
+            <h3>Export Template</h3>
+            <div class="code-block">
+import { createTemplateFromEditor } from 'canva-editor/utils/templateExport';
+
+const templateData = createTemplateFromEditor(
+  currentPages,
+  'My Template',
+  {
+    description: 'A beautiful template',
+    author: 'John Doe',
+    tags: ['business', 'modern'],
+    download: true
+  }
+);
+            </div>
+
+            <h3>Import Template with Parameters</h3>
+            <div class="code-block">
+import { loadTemplateFromFile, importTemplate } from 'canva-editor/utils/templateImport';
+
+const templateData = await loadTemplateFromFile(file);
+const customizedPages = importTemplate(templateData, {
+  templatePath: './template.json',
+  textParameters: {
+    title: 'Welcome!',
+    subtitle: 'Get started today'
+  },
+  imageParameters: {
+    backgroundImage: 'https://example.com/bg.jpg'
+  }
+});
+            </div>
+
+            <h3>React Components</h3>
+            <div class="code-block">
+import { TemplateManager, TemplateCustomizer } from 'canva-editor/components/template';
+
+// Template Manager Component
+&lt;TemplateManager onClose={() => setShowManager(false)} /&gt;
+
+// Template Customizer Component
+&lt;TemplateCustomizer
+  templateData={templateData}
+  onApply={(customizedPages) => {
+    // Apply to editor
+    customizedPages.forEach((page, index) => {
+      actions.setPage(activePage + index, page);
+    });
+  }}
+/&gt;
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📁 File Structure</h2>
+            <div class="code-block">
+canva-editor/
+├── packages/editor/src/
+│   ├── utils/
+│   │   ├── templateExport.ts      # Export functionality
+│   │   └── templateImport.ts      # Import functionality
+│   └── components/template/
+│       ├── TemplateManager.tsx    # Export/Import UI
+│       ├── TemplateCustomizer.tsx # Parameter customization UI
+│       └── index.ts
+├── api/
+│   ├── app.js                     # Updated with new endpoints
+│   └── json/
+│       └── sample-template.json    # Sample template with parameters
+└── TEMPLATE_SYSTEM.md             # Documentation
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🧪 Testing</h2>
+            <p>To test the template system:</p>
+            <ol>
+                <li>Start the API server: <code>cd canva-editor/api && npm start</code></li>
+                <li>Run the test script: <code>node test-template-system.js</code></li>
+                <li>Use the React components in your editor</li>
+            </ol>
+            
+            <button class="button" onclick="testAPI()">Test API Connection</button>
+            <div id="test-results"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📖 Documentation</h2>
+            <p>Complete documentation is available in <code>TEMPLATE_SYSTEM.md</code></p>
+            <p>This includes:</p>
+            <ul>
+                <li>Detailed API documentation</li>
+                <li>Usage examples</li>
+                <li>Template structure specification</li>
+                <li>Parameter substitution syntax</li>
+                <li>Error handling guide</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<p>Testing API connection...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:4000/api/templates?ps=1&pi=0');
+                if (response.ok) {
+                    resultsDiv.innerHTML = '<p class="success">✅ API is running and accessible!</p>';
+                } else {
+                    resultsDiv.innerHTML = '<p class="error">❌ API responded with error: ' + response.status + '</p>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = '<p class="error">❌ Cannot connect to API. Make sure the server is running on port 4000.</p>';
+            }
+        }
+    </script>
+</body>
+</html>
