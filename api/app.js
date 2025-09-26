@@ -15,6 +15,52 @@ app.listen(PORT, () => {
 });
 app.use(express.static(__dirname + '/public')); //Serves resources from public folder
 
+// ---------------------------
+// Template DB (file-based)
+// ---------------------------
+const TEMPLATES_DIR = path.join(__dirname, 'json', 'custom-templates');
+
+function ensureDirExists(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+function sanitizeFileName(name) {
+  return String(name).replace(/[^a-z0-9_\-\. ]/gi, '_');
+}
+
+function templateFilePath(name) {
+  const fileName = sanitizeFileName(name).endsWith('.json')
+    ? sanitizeFileName(name)
+    : `${sanitizeFileName(name)}.json`;
+  return path.join(TEMPLATES_DIR, fileName);
+}
+
+function saveTemplateToDb(name, templateData) {
+  ensureDirExists(TEMPLATES_DIR);
+  const filePath = templateFilePath(name);
+  fs.writeFileSync(filePath, JSON.stringify(templateData, null, 2), 'utf8');
+  return filePath;
+}
+
+function loadTemplateFromDbByName(name) {
+  ensureDirExists(TEMPLATES_DIR);
+  const candidates = [name, `${name}.json`];
+  for (const c of candidates) {
+    const p = templateFilePath(c);
+    if (fs.existsSync(p)) {
+      try {
+        const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+        return { json, path: p };
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 function paginateArrayWithFilter(array, size = 30, index = 0, keyword = '') {
   const startIndex = index * size;
   const endIndex = startIndex + size;
@@ -288,9 +334,14 @@ app.post('/api/template/export', async (req, res) => {
       }
     };
 
+    // Persist to DB (file-based)
+    saveTemplateToDb(templateName, templateData);
+
     res.json({
       success: true,
       template: templateData,
+      // Clean URLs that work without resending the template
+      pathUrl: `/api/template/${encodeURIComponent(templateName)}.json`,
       downloadUrl: `/api/template/download/${encodeURIComponent(templateName)}`
     });
   } catch (error) {
@@ -305,14 +356,27 @@ app.post('/api/template/export', async (req, res) => {
 app.get('/api/template/download/:templateName', async (req, res) => {
   try {
     const { templateName } = req.params;
-    const { template } = req.query;
-    
-    if (!template) {
-      return res.status(400).json({ error: 'Template data is required' });
+    // Resolve from local store only (no query/body expected)
+    let dataObj = null;
+    // 1) Custom DB (api/json/custom-templates)
+    const fromDb = loadTemplateFromDbByName(templateName);
+    if (fromDb) {
+      dataObj = fromDb.json;
+    } else {
+      // 2) Bundled api/json directory
+      const candidates = [templateName, `${templateName}.json`].filter(Boolean);
+      let resolved = null;
+      for (const fname of candidates) {
+        const p = path.isAbsolute(fname) ? fname : path.join(__dirname, './json/', fname);
+        if (fs.existsSync(p)) { resolved = p; break; }
+      }
+      if (!resolved) {
+        return res.status(404).json({ error: 'Template file not found' });
+      }
+      dataObj = JSON.parse(fs.readFileSync(resolved, 'utf8'));
     }
 
-    const templateData = JSON.parse(template);
-    const jsonString = JSON.stringify(templateData, null, 2);
+    const jsonString = JSON.stringify(dataObj, null, 2);
     
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${templateName}.json"`);
@@ -409,9 +473,17 @@ app.post('/api/template/import', async (req, res) => {
       });
     }
 
+    // Persist imported/customized template
+    const baseName = templateData.name
+      || (templatePath.startsWith('http') ? `imported-${Date.now()}` : path.parse(templatePath).name)
+      || `imported-${Date.now()}`;
+    saveTemplateToDb(baseName, templateData);
+
     res.json({
       success: true,
-      template: templateData
+      template: templateData,
+      pathUrl: `/api/template/${encodeURIComponent(baseName)}.json`,
+      downloadUrl: `/api/template/download/${encodeURIComponent(baseName)}`
     });
   } catch (error) {
     console.error('Template import error:', error);
@@ -426,116 +498,45 @@ app.get('/api/template/:templateName', async (req, res) => {
   try {
     const { templateName: rawName } = req.params;
     const templateName = decodeURIComponent(rawName);
-    const { textParameters, imageParameters } = req.query;
-    
+
+    // 0) Try custom DB first (api/json/custom-templates)
     let templateData;
-
-    // 1) Try to resolve a local JSON file by name
-    const candidateFilenames = [
-      templateName,
-      `${templateName}.json`,
-      templateName.endsWith('.json') ? templateName : null,
-    ].filter(Boolean);
-
-    let resolvedLocalPath = null;
-    for (const fname of candidateFilenames) {
-      const p = path.isAbsolute(fname)
-        ? fname
-        : path.join(__dirname, './json/', fname);
-      if (fs.existsSync(p)) {
-        resolvedLocalPath = p;
-        break;
-      }
-    }
-
-    if (resolvedLocalPath) {
-      // Load local template file
-      const jsonString = fs.readFileSync(resolvedLocalPath, 'utf8');
-      templateData = JSON.parse(jsonString).pages || JSON.parse(jsonString);
-      // If file has top-level object with pages, keep as is; otherwise it's already pages
+    const fromDb = loadTemplateFromDbByName(templateName);
+    if (fromDb) {
+      templateData = fromDb.json;
     } else {
-      // 2) Fall back to templates index (packed data inside templates.json)
-      const templatesPath = path.join(__dirname, './json/templates.json');
-      const templatesData = JSON.parse(fs.readFileSync(templatesPath, 'utf8'));
-      const template = templatesData.data.find((t) =>
-        t.desc.toLowerCase().includes(templateName.toLowerCase()) ||
-        t.img.includes(templateName)
-      );
-      if (!template) {
+      // 1) Try to resolve a local JSON file by name (api/json)
+      const candidateFilenames = [
+        templateName,
+        `${templateName}.json`,
+      ].filter(Boolean);
+
+      let resolvedLocalPath = null;
+      for (const fname of candidateFilenames) {
+        const p = path.isAbsolute(fname) ? fname : path.join(__dirname, './json/', fname);
+        if (fs.existsSync(p)) { resolvedLocalPath = p; break; }
+      }
+
+      if (resolvedLocalPath) {
+        const jsonString = fs.readFileSync(resolvedLocalPath, 'utf8');
+        templateData = JSON.parse(jsonString);
+      } else {
         return res.status(404).json({ error: 'Template not found' });
       }
-      templateData = JSON.parse(template.data);
-    }
-    
-    // Apply text parameters if provided
-    if (textParameters) {
-      const textParams = JSON.parse(textParameters);
-      templateData = templateData.map(page => {
-        const updatedPage = { ...page };
-        Object.keys(updatedPage.layers).forEach(layerId => {
-          const layer = updatedPage.layers[layerId];
-          if (layer.type === 'TextLayer' && layer.props.text) {
-            let updatedText = layer.props.text;
-            Object.keys(textParams).forEach(placeholder => {
-              const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
-              updatedText = updatedText.replace(regex, textParams[placeholder]);
-            });
-            updatedPage.layers[layerId] = {
-              ...layer,
-              props: {
-                ...layer.props,
-                text: updatedText
-              }
-            };
-          }
-        });
-        return updatedPage;
-      });
     }
 
-    // Apply image parameters if provided
-    if (imageParameters) {
-      const imageParams = JSON.parse(imageParameters);
-      templateData = templateData.map(page => {
-        const updatedPage = { ...page };
-        Object.keys(updatedPage.layers).forEach(layerId => {
-          const layer = updatedPage.layers[layerId];
-          if (layer.type === 'ImageLayer' && layer.props.image) {
-            const currentImageUrl = layer.props.image.url || layer.props.image.thumb;
-            Object.keys(imageParams).forEach(placeholder => {
-              if (currentImageUrl.includes(placeholder)) {
-                updatedPage.layers[layerId] = {
-                  ...layer,
-                  props: {
-                    ...layer.props,
-                    image: {
-                      ...layer.props.image,
-                      url: imageParams[placeholder],
-                      thumb: imageParams[placeholder]
-                    }
-                  }
-                };
-              }
-            });
-          }
-        });
-        return updatedPage;
-      });
-    }
-
-    res.json({
-      success: true,
-      template: {
-        name: templateName,
-        description: typeof templateData === 'object' && templateData.description ? templateData.description : undefined,
-        thumbnail: typeof templateData === 'object' && templateData.thumbnail ? templateData.thumbnail : undefined,
-        pages: Array.isArray(templateData.pages) ? templateData.pages : templateData,
-        metadata: {
-          version: '1.0.0',
-          createdAt: new Date().toISOString()
+    // Normalize response to a full template object
+    const responseTemplate = Array.isArray(templateData)
+      ? {
+          name: templateName,
+          description: '',
+          thumbnail: '',
+          pages: templateData,
+          metadata: { version: '1.0.0', createdAt: new Date().toISOString() }
         }
-      }
-    });
+      : templateData;
+
+    res.json({ success: true, template: responseTemplate });
   } catch (error) {
     console.error('Get template error:', error);
     res.status(500).json({ error: 'Failed to get template' });
