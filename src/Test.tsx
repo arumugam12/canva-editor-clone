@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 const editorConfig: EditorConfig = {
   apis: {
-    url: 'https://canva-editor-api.vercel.app/api',
+    url: 'http://localhost:4000/api',
     searchFonts: '/fonts',
     searchTemplates: '/templates',
     searchTexts: '/texts',
@@ -25,7 +25,7 @@ const editorConfig: EditorConfig = {
     searchShape: 'Search shapes',
     searchFrame: 'Search frames',
   },
-  editorAssetsUrl: 'https://canva-editor-api.vercel.app/editor',
+  editorAssetsUrl: 'http://localhost:4000/editor',
   imageKeywordSuggestions: 'animal,sport,love,scene,dog,cat,whale',
   templateKeywordSuggestions:
     'mother,sale,discount,fashion,model,deal,motivation,quote',

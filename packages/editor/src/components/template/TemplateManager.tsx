@@ -1,17 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import { useEditor } from '../../hooks';
-import { exportTemplate, downloadTemplate, createTemplateFromEditor } from '../../utils/templateExport';
-import { loadTemplateFromFile, importTemplate, validateTemplate } from '../../utils/templateImport';
+import { createTemplateFromEditor } from '../../utils/templateExport';
+import { serialize } from '../../utils/layer/page';
+import { loadTemplateFromFile, validateTemplate } from '../../utils/templateImport';
 import { SerializedPage } from '../../types';
 
 interface TemplateManagerProps {
   onClose?: () => void;
 }
-
 const TemplateManager: React.FC<TemplateManagerProps> = ({ onClose }) => {
-  const { actions, activePage, pages } = useEditor((state) => ({
+  const { actions, activePage, pages, config } = useEditor((state, config) => ({
     activePage: state.activePage,
     pages: state.pages,
+    config,
   }));
 
   const [templateName, setTemplateName] = useState('');
@@ -30,7 +31,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onClose }) => {
 
     setIsExporting(true);
     try {
-      const currentPages = pages.map(page => page.serialized);
+      const currentPages = serialize(pages);
       const templateData = createTemplateFromEditor(
         currentPages,
         templateName,
@@ -45,7 +46,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onClose }) => {
 
       // Also send to API for storage
       try {
-        const response = await fetch('/api/template/export', {
+        const response = await fetch(`${config.apis.url}/template/export`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -119,7 +120,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onClose }) => {
     setImportError('');
 
     try {
-      const response = await fetch('/api/template/import', {
+      const response = await fetch(`${config.apis.url}/template/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

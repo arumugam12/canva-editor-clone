@@ -33,8 +33,13 @@ const TemplateCustomizer: React.FC<TemplateCustomizerProps> = ({
     
     pages.forEach(page => {
       Object.values(page.layers).forEach(layer => {
-        if (layer.type === 'TextLayer' && layer.props.text) {
-          const text = layer.props.text;
+        if (
+          layer?.type &&
+          typeof layer.type === 'object' &&
+          (layer.type as any).resolvedName === 'Text' &&
+          typeof (layer.props as any)?.text === 'string'
+        ) {
+          const text = (layer.props as any).text as string;
           const matches = text.match(/\{\{([^}]+)\}\}/g);
           if (matches) {
             matches.forEach(match => {
@@ -55,8 +60,13 @@ const TemplateCustomizer: React.FC<TemplateCustomizerProps> = ({
     
     pages.forEach(page => {
       Object.values(page.layers).forEach(layer => {
-        if (layer.type === 'ImageLayer' && layer.props.image) {
-          const imageUrl = layer.props.image.url || layer.props.image.thumb || '';
+        if (
+          layer?.type &&
+          typeof layer.type === 'object' &&
+          (layer.type as any).resolvedName === 'Image'
+        ) {
+          const img = ((layer.props as any)?.image ?? null) as { url?: string; thumb?: string } | null;
+          const imageUrl = (img?.url ?? img?.thumb ?? '') as string;
           const matches = imageUrl.match(/\{\{([^}]+)\}\}/g);
           if (matches) {
             matches.forEach(match => {
@@ -84,8 +94,13 @@ const TemplateCustomizer: React.FC<TemplateCustomizerProps> = ({
         const updatedPage = { ...page };
         Object.keys(updatedPage.layers).forEach(layerId => {
           const layer = updatedPage.layers[layerId];
-          if (layer.type === 'TextLayer' && layer.props.text) {
-            let updatedText = layer.props.text;
+          if (
+            layer?.type &&
+            typeof layer.type === 'object' &&
+            (layer.type as any).resolvedName === 'Text' &&
+            typeof (layer.props as any)?.text === 'string'
+          ) {
+            let updatedText = (layer.props as any).text as string;
             Object.keys(textParameters).forEach(placeholder => {
               const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
               updatedText = updatedText.replace(regex, textParameters[placeholder]);
@@ -93,10 +108,10 @@ const TemplateCustomizer: React.FC<TemplateCustomizerProps> = ({
             updatedPage.layers[layerId] = {
               ...layer,
               props: {
-                ...layer.props,
-                text: updatedText
+                ...(layer.props as object),
+                text: updatedText as unknown as never
               }
-            };
+            } as any;
           }
         });
         return updatedPage;
@@ -109,21 +124,27 @@ const TemplateCustomizer: React.FC<TemplateCustomizerProps> = ({
         const updatedPage = { ...page };
         Object.keys(updatedPage.layers).forEach(layerId => {
           const layer = updatedPage.layers[layerId];
-          if (layer.type === 'ImageLayer' && layer.props.image) {
-            const currentImageUrl = layer.props.image.url || layer.props.image.thumb;
+          if (
+            layer?.type &&
+            typeof layer.type === 'object' &&
+            (layer.type as any).resolvedName === 'Image'
+          ) {
+            const img = ((layer.props as any)?.image ?? null) as { url?: string; thumb?: string } | null;
+            const currentImageUrl = (img?.url ?? img?.thumb ?? '') as string;
             Object.keys(imageParameters).forEach(placeholder => {
-              if (currentImageUrl.includes(`{{${placeholder}}}`)) {
+              if (typeof currentImageUrl === 'string' && currentImageUrl.includes(`{{${placeholder}}}`)) {
+                const newUrl = imageParameters[placeholder];
                 updatedPage.layers[layerId] = {
                   ...layer,
                   props: {
-                    ...layer.props,
+                    ...(layer.props as object),
                     image: {
-                      ...layer.props.image,
-                      url: imageParameters[placeholder],
-                      thumb: imageParameters[placeholder]
-                    }
+                      ...((img ?? {}) as object),
+                      url: newUrl,
+                      thumb: newUrl
+                    } as any
                   }
-                };
+                } as any;
               }
             });
           }
