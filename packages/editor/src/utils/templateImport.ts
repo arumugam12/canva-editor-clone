@@ -1,24 +1,6 @@
 import { unpack } from './minifier';
 import { SerializedPage } from '../types';
-
-export interface TemplateImportData {
-  templatePath: string;
-  textParameters: Record<string, string>;
-  imageParameters: Record<string, string>;
-}
-
-export interface TemplateExportData {
-  name: string;
-  description: string;
-  thumbnail: string;
-  pages: SerializedPage[];
-  metadata: {
-    version: string;
-    createdAt: string;
-    author?: string;
-    tags?: string[];
-  };
-}
+import type { TemplateExportData, TemplateImportData } from './templateExport';
 
 /**
  * Parse template JSON file
@@ -83,8 +65,13 @@ export const applyTextParameters = (
     Object.keys(updatedPage.layers).forEach(layerId => {
       const layer = updatedPage.layers[layerId];
       
-      if (layer.type === 'TextLayer' && layer.props.text) {
-        let updatedText = layer.props.text;
+      if (
+        layer?.type &&
+        typeof layer.type === 'object' &&
+        (layer.type as any).resolvedName === 'Text' &&
+        typeof (layer.props as any)?.text === 'string'
+      ) {
+        let updatedText = (layer.props as any).text as string;
         
         // Replace placeholders with actual text
         Object.keys(textParameters).forEach(placeholder => {
@@ -95,8 +82,8 @@ export const applyTextParameters = (
         updatedPage.layers[layerId] = {
           ...layer,
           props: {
-            ...layer.props,
-            text: updatedText
+            ...(layer.props as object),
+            text: updatedText as unknown as never
           }
         };
       }
@@ -120,21 +107,29 @@ export const applyImageParameters = (
     Object.keys(updatedPage.layers).forEach(layerId => {
       const layer = updatedPage.layers[layerId];
       
-      if (layer.type === 'ImageLayer' && layer.props.image) {
-        const currentImageUrl = layer.props.image.url || layer.props.image.thumb;
+      if (
+        layer?.type &&
+        typeof layer.type === 'object' &&
+        (layer.type as any).resolvedName === 'Image'
+      ) {
+        const img = ((layer.props as any)?.image ?? null) as
+          | { url?: string; thumb?: string }
+          | null;
+        const currentImageUrl = (img?.url ?? img?.thumb ?? '') as string;
         
         // Replace image if parameter matches
         Object.keys(imageParameters).forEach(placeholder => {
-          if (currentImageUrl.includes(placeholder)) {
+          if (typeof currentImageUrl === 'string' && currentImageUrl.includes(placeholder)) {
+            const newUrl = imageParameters[placeholder];
             updatedPage.layers[layerId] = {
               ...layer,
               props: {
-                ...layer.props,
+                ...(layer.props as object),
                 image: {
-                  ...layer.props.image,
-                  url: imageParameters[placeholder],
-                  thumb: imageParameters[placeholder]
-                }
+                  ...((img ?? {}) as object),
+                  url: newUrl,
+                  thumb: newUrl
+                } as any
               }
             };
           }
