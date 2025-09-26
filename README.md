@@ -1,7 +1,9 @@
 ---
-# Template Export/Import System and API (Job Assessment Guide)
-
+# Template Export/Import System and API
 This repository contains a working Template Export/Import system and a REST API to manage templates and parameterized rendering. Use this guide to build locally, run demos, and explain the implementation during interviews.
+
+## Deployed in Vercel
+https://canva-editor-clone.vercel.app/
 
 ## Quick Start
 
@@ -11,7 +13,7 @@ This repository contains a working Template Export/Import system and a REST API 
 Terminal A (API server on port 4000):
 
 ```bash
-cd canva-editor/api
+cd api
 npm install
 npm start
 ```
@@ -19,7 +21,6 @@ npm start
 Terminal B (Vite dev server on port 5173):
 
 ```bash
-cd canva-editor
 npm install
 npm run dev
 ```
@@ -59,7 +60,7 @@ Visit the app at: http://localhost:5173
 
 ## Running the Automated Tests
 
-With the API running on port 4000, from `canva-editor/` run:
+With the API running on port 4000, from `/api` run:
 
 ```bash
 npm install axios
