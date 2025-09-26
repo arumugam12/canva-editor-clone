@@ -1,4 +1,4 @@
-import { ChangeEvent, FC, useRef, useState } from 'react';
+import { ChangeEvent, FC, useCallback, useRef, useState } from 'react';
 import { useEditor } from 'canva-editor/hooks';
 import CloseSidebarButton from './CloseButton';
 import Button from 'canva-editor/components/button/Button';
@@ -9,8 +9,12 @@ interface UploadContentProps {
   onClose: () => void;
 }
 const UploadContent: FC<UploadContentProps> = ({ visibility, onClose }) => {
-  const inputFileRef = useRef<HTMLInputElement>(null);
-  const { actions } = useEditor();
+  const inputImageRef = useRef<HTMLInputElement>(null);
+  const inputJsonRef = useRef<HTMLInputElement>(null);
+  const { actions, activePage, config } = useEditor((state, config) => ({
+    activePage: state.activePage,
+    config,
+  }));
   const isMobile = useMobileDetect();
 
   const [images, setImages] = useState<
@@ -31,20 +35,77 @@ const UploadContent: FC<UploadContentProps> = ({ visibility, onClose }) => {
       }
     };
   };
-  const handleUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleUploadImage = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files && e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages((prevState) => {
-          return prevState.concat([
-            { url: reader.result as string, type: 'image' },
-          ]);
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${config.apis.url}/upload/image`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) throw new Error('Upload image failed');
+      const result = await res.json();
+      const url = result.url as string;
+      const width = result.width as number | undefined;
+      const height = result.height as number | undefined;
+      // Add to local preview grid
+      setImages((prev) => prev.concat([{ url, type: 'image' }]));
+      // Add to editor
+      if (url) {
+        if (width && height) {
+          actions.addImageLayer({ url, thumb: url }, { width, height });
+        } else {
+          // Fallback: load to get dimensions
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () =>
+            actions.addImageLayer(
+              { url, thumb: url },
+              { width: img.naturalWidth, height: img.naturalHeight }
+            );
+          img.src = url;
+        }
+        if (isMobile) onClose();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Upload PNG via API failed');
+    } finally {
+      e.target.value = '';
     }
-  };
+  }, [actions, config?.apis?.url, isMobile, onClose]);
+
+  const handleUploadTemplateJson = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${config.apis.url}/template/import-file`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) throw new Error('Upload template JSON failed');
+      const result = await res.json();
+      const template = result.template || result;
+      const pages = template.pages || [];
+      if (Array.isArray(pages) && pages.length > 0) {
+        pages.forEach((page: any, index: number) => {
+          actions.setPage(activePage + index, page);
+        });
+        if (isMobile) onClose();
+      } else {
+        alert('No pages found in uploaded template');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Upload JSON via API failed');
+    } finally {
+      e.target.value = '';
+    }
+  }, [actions, activePage, config?.apis?.url, isMobile, onClose]);
   return (
     <div
       css={{
@@ -61,19 +122,28 @@ const UploadContent: FC<UploadContentProps> = ({ visibility, onClose }) => {
           margin: 16,
         }}
       >
-        <Button
-          css={{ width: '100%' }}
-          onClick={() => inputFileRef.current?.click()}
-        >
-          Upload
-        </Button>
+        <div css={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Button css={{ width: '100%' }} onClick={() => inputImageRef.current?.click()}>
+            Upload PNG
+          </Button>
+          <Button css={{ width: '100%' }} onClick={() => inputJsonRef.current?.click()}>
+            Upload JSON
+          </Button>
+        </div>
       </div>
       <input
-        ref={inputFileRef}
+        ref={inputImageRef}
         type={'file'}
         accept='image/*'
         css={{ display: 'none' }}
-        onChange={handleUpload}
+        onChange={handleUploadImage}
+      />
+      <input
+        ref={inputJsonRef}
+        type={'file'}
+        accept='.json,application/json'
+        css={{ display: 'none' }}
+        onChange={handleUploadTemplateJson}
       />
       <div css={{ padding: '16px' }}>
         <div

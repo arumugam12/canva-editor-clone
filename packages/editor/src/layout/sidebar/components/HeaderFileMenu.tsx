@@ -24,12 +24,14 @@ import { BoxSize } from 'canva-editor/types';
 import { dataMapping, pack, unpack } from 'canva-editor/utils/minifier';
 import HamburgerIcon from 'canva-editor/icons/HamburgerIcon';
 import useMobileDetect from 'canva-editor/hooks/useMobileDetect';
+import TemplateManager from 'canva-editor/components/template/TemplateManager';
 
 interface Props {
   designName: string;
 }
 const HeaderFileMenu: FC<Props> = ({ designName }) => {
   const [openPreview, setOpenPreview] = useState(false);
+  const [openTemplateManager, setOpenTemplateManager] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const isMobile = useMobileDetect();
   const { actions, query, activePage, pageSize, isPageLocked } = useEditor(
@@ -134,7 +136,7 @@ const HeaderFileMenu: FC<Props> = ({ designName }) => {
       },
     },
     {
-      label: 'Export',
+      label: 'Export1',
       type: 'submenu',
       icon: <ExportIcon />,
       items: [
@@ -146,7 +148,7 @@ const HeaderFileMenu: FC<Props> = ({ designName }) => {
           },
         },
         {
-          label: 'All pages as PNG',
+          label: 'All pages as PNGasasasas',
           type: 'normal',
           action: () => {
             actions.fireDownloadPNGCmd(0);
@@ -180,6 +182,15 @@ const HeaderFileMenu: FC<Props> = ({ designName }) => {
           },
         },
       ],
+    },
+    { label: 'Divider', type: 'divider' },
+    {
+      label: 'Template Manager',
+      type: 'normal',
+      icon: <ExportIcon />,
+      action: () => {
+        setOpenTemplateManager(true);
+      },
     },
     { label: 'Divider', type: 'divider' },
     {
@@ -403,6 +414,11 @@ const HeaderFileMenu: FC<Props> = ({ designName }) => {
               {isCreating ? 'Create new design' : 'Resize'}
             </button>
           </div>
+        </div>
+      </QuickBoxDialog>
+      <QuickBoxDialog open={openTemplateManager} onClose={() => setOpenTemplateManager(false)}>
+        <div css={{ padding: 16, width: 520, maxWidth: '90vw' }}>
+          <TemplateManager onClose={() => setOpenTemplateManager(false)} />
         </div>
       </QuickBoxDialog>
       {openPreview && <PreviewModal onClose={() => setOpenPreview(false)} />}

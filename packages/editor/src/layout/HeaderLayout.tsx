@@ -1,4 +1,4 @@
-import { forwardRef, ForwardRefRenderFunction, useState } from 'react';
+import { forwardRef, ForwardRefRenderFunction, useCallback, useState } from 'react';
 import { useEditor } from 'canva-editor/hooks';
 import CanvaIcon from 'canva-editor/icons/CanvaIcon';
 import EditInlineInput from 'canva-editor/components/EditInlineInput';
@@ -38,7 +38,57 @@ const HeaderLayout: ForwardRefRenderFunction<
   HeaderLayoutProps
 > = ({ logoUrl, designName, saving, onChanges }, ref) => {
   const [name, setName] = useState(designName);
-  const { actions, query } = useEditor();
+  const { actions, query, config } = useEditor((state, config) => ({ config }));
+  
+  const exportPNGViaAPI = useCallback(async () => {
+    try {
+      const pages = query.serialize();
+      const response = await fetch(`${config.apis.url}/export/png`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pages, name }),
+      });
+      if (!response.ok) throw new Error('Failed to export PNG');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(name || 'design').replace(/\s+/g, '_')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Export PNG via API failed');
+    }
+  }, [config?.apis?.url, name, query]);
+
+  const exportJSONViaAPI = useCallback(async () => {
+    try {
+      const pages = query.serialize();
+      const response = await fetch(`${config.apis.url}/template/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateName: name || 'design', pages }),
+      });
+      if (!response.ok) throw new Error('Failed to export JSON');
+      // If server returns JSON data, download it as a file
+      const json = await response.json();
+      const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(name || 'design').replace(/\s+/g, '_')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Export JSON via API failed');
+    }
+  }, [config?.apis?.url, name, query]);
   const isMobile = useMobileDetect();
   return (
     <div
@@ -159,10 +209,17 @@ const HeaderLayout: ForwardRefRenderFunction<
             <Button onClick={() => {
               actions.fireDownloadPNGCmd(0);
             }}>
-              <div css={{ fontSize: 20 }}>
-                <ExportIcon />
-              </div>{' '}
+                <div css={{ fontSize: 20 }}>
+                  <ExportIcon />
+                </div>{' '}
               <span css={{ marginRight: 4, marginLeft: 4 }}>Export</span>
+              </Button>
+            <div css={{ width: 8 }} />
+            <Button onClick={exportJSONViaAPI}>
+                <div css={{ fontSize: 20 }}>
+                  <ExportIcon />
+                </div>{' '}
+              <span css={{ marginRight: 4, marginLeft: 4 }}>Export JSON</span>
             </Button>
           </>
         )}

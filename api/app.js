@@ -168,18 +168,41 @@ app.get('/api/templates', async (req, res) => {
 });
 
 /**
- * Search template keywords
+ * Append an imported template to templates.json in existing format
+ * Body: { name: string, pages: any[], img?: string, desc?: string }
  */
-app.get('/api/template-suggestion', async (req, res) => {
-  fs.readFile(path.join(__dirname, './json/templates.json'), 'utf8', (err, jsonString) => {
-    if (err) {
-      console.error(err);
-      res.send(null);
-      return;
+app.post('/api/templates/import-local', async (req, res) => {
+  try {
+    const { name, pages, img = '', desc = '' } = req.body || {};
+    if (!name || !Array.isArray(pages)) {
+      return res.status(400).json({ error: 'name and pages are required' });
     }
-    const rs = searchKeywords(req.query.kw, JSON.parse(jsonString).data);
-    res.send(rs.map((kw, idx) => ({ id: idx + 1, name: kw })));
-  });
+
+    const filePath = path.join(__dirname, './json/templates.json');
+    let jsonObj = { data: [] };
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      jsonObj = JSON.parse(raw);
+      if (!Array.isArray(jsonObj.data)) jsonObj.data = [];
+    } catch (_) {
+      jsonObj = { data: [] };
+    }
+
+    const item = {
+      img,
+      data: JSON.stringify(pages),
+      desc,
+      pages: pages.length || 0,
+    };
+    // Prepend to show newest first (like existing lists)
+    jsonObj.data.unshift(item);
+
+    fs.writeFileSync(filePath, JSON.stringify(jsonObj, null, 2), 'utf8');
+    return res.json({ success: true, inserted: 1 });
+  } catch (error) {
+    console.error('templates/import-local error:', error);
+    return res.status(500).json({ error: 'Failed to append template' });
+  }
 });
 
 /**
@@ -410,8 +433,11 @@ app.post('/api/template/import', async (req, res) => {
         const jsonString = await response.text();
         templateData = JSON.parse(jsonString);
       } else {
-        // Load from local file
-        const templatePathFull = path.join(__dirname, templatePath);
+        // Load from local file (support leading '/' by resolving relative to __dirname)
+        const normalizedPath = templatePath.startsWith('/')
+          ? path.join(__dirname, `.${templatePath}`)
+          : path.join(__dirname, templatePath);
+        const templatePathFull = normalizedPath;
         const jsonString = fs.readFileSync(templatePathFull, 'utf8');
         templateData = JSON.parse(jsonString);
       }
@@ -419,71 +445,147 @@ app.post('/api/template/import', async (req, res) => {
       return res.status(400).json({ error: 'Failed to load template file' });
     }
 
+    // Normalize legacy/list item format to full template object
+    // Support files like: { img, data: stringifiedPages, desc, pages }
+    if (!templateData || (typeof templateData === 'object' && !Array.isArray(templateData.pages))) {
+      try {
+        let parsedPages = [];
+        if (Array.isArray(templateData)) {
+          parsedPages = templateData;
+          templateData = {};
+        } else if (templateData && typeof templateData.data === 'string') {
+          parsedPages = JSON.parse(templateData.data);
+        } else if (templateData && Array.isArray(templateData.data)) {
+          parsedPages = templateData.data;
+        } else if (templateData && Array.isArray(templateData.pages)) {
+          parsedPages = templateData.pages;
+        }
+
+        if (Array.isArray(parsedPages) && parsedPages.length > 0) {
+          const inferredName = (templateData && (templateData.name || templateData.title))
+            || (templatePath.startsWith('http') ? '' : path.parse(templatePath).name)
+            || `imported-${Date.now()}`;
+          templateData = {
+            name: inferredName,
+            description: (templateData && (templateData.desc || templateData.description)) || '',
+            thumbnail: (templateData && (templateData.img || templateData.thumbnail)) || '',
+            pages: parsedPages,
+            metadata: {
+              version: '1.0.0',
+              createdAt: new Date().toISOString(),
+            },
+          };
+        }
+      } catch (_) {
+        // ignore, will validate below
+      }
+    }
+
+    // Validate we have pages array now
+    if (!templateData || !Array.isArray(templateData.pages)) {
+      return res.status(400).json({ error: 'Template format invalid: missing pages' });
+    }
+
+    // Normalize parameters to safe objects
+    const textParams = (textParameters && typeof textParameters === 'object') ? textParameters : {};
+    const imageParams = (imageParameters && typeof imageParameters === 'object') ? imageParameters : {};
+
     // Apply text parameters if provided
-    if (textParameters && Object.keys(textParameters).length > 0) {
-      templateData.pages = templateData.pages.map(page => {
+    if (Object.keys(textParams).length > 0) {
+      templateData.pages = templateData.pages.map((page) => {
         const updatedPage = { ...page };
-        Object.keys(updatedPage.layers).forEach(layerId => {
-          const layer = updatedPage.layers[layerId];
-          if (layer.type === 'TextLayer' && layer.props.text) {
-            let updatedText = layer.props.text;
-            Object.keys(textParameters).forEach(placeholder => {
+        const layers = (updatedPage && updatedPage.layers && typeof updatedPage.layers === 'object')
+          ? { ...updatedPage.layers }
+          : {};
+        Object.keys(layers).forEach((layerId) => {
+          const layer = layers[layerId];
+          if (!layer || layer.type !== 'TextLayer') return;
+          const props = layer.props || {};
+          if (typeof props.text !== 'string') return;
+          let updatedText = props.text;
+          Object.keys(textParams).forEach((placeholder) => {
+            try {
               const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
-              updatedText = updatedText.replace(regex, textParameters[placeholder]);
-            });
-            updatedPage.layers[layerId] = {
-              ...layer,
-              props: {
-                ...layer.props,
-                text: updatedText
-              }
-            };
-          }
+              updatedText = updatedText.replace(regex, String(textParams[placeholder] ?? ''));
+            } catch (_) {}
+          });
+          layers[layerId] = {
+            ...layer,
+            props: {
+              ...props,
+              text: updatedText,
+            },
+          };
         });
+        updatedPage.layers = layers;
         return updatedPage;
       });
     }
 
     // Apply image parameters if provided
-    if (imageParameters && Object.keys(imageParameters).length > 0) {
-      templateData.pages = templateData.pages.map(page => {
+    if (Object.keys(imageParams).length > 0) {
+      templateData.pages = templateData.pages.map((page) => {
         const updatedPage = { ...page };
-        Object.keys(updatedPage.layers).forEach(layerId => {
-          const layer = updatedPage.layers[layerId];
-          if (layer.type === 'ImageLayer' && layer.props.image) {
-            const currentImageUrl = layer.props.image.url || layer.props.image.thumb;
-            Object.keys(imageParameters).forEach(placeholder => {
-              if (currentImageUrl.includes(placeholder)) {
-                updatedPage.layers[layerId] = {
-                  ...layer,
-                  props: {
-                    ...layer.props,
-                    image: {
-                      ...layer.props.image,
-                      url: imageParameters[placeholder],
-                      thumb: imageParameters[placeholder]
-                    }
-                  }
-                };
-              }
-            });
-          }
+        const layers = (updatedPage && updatedPage.layers && typeof updatedPage.layers === 'object')
+          ? { ...updatedPage.layers }
+          : {};
+        Object.keys(layers).forEach((layerId) => {
+          const layer = layers[layerId];
+          if (!layer || layer.type !== 'ImageLayer') return;
+          const props = layer.props || {};
+          const img = props.image || {};
+          const currentImageUrl = String(img.url || img.thumb || '');
+          Object.keys(imageParams).forEach((placeholder) => {
+            const replacement = String(imageParams[placeholder] ?? '');
+            if (placeholder && currentImageUrl.includes(placeholder)) {
+              layers[layerId] = {
+                ...layer,
+                props: {
+                  ...props,
+                  image: {
+                    ...img,
+                    url: replacement,
+                    thumb: replacement,
+                  },
+                },
+              };
+            }
+          });
         });
+        updatedPage.layers = layers;
         return updatedPage;
       });
     }
 
-    // Persist imported/customized template
-    const baseName = templateData.name
-      || (templatePath.startsWith('http') ? `imported-${Date.now()}` : path.parse(templatePath).name)
+    // Persist imported/customized template as list-item JSON under api/json with a unique name
+    const listImg = (req.body && (req.body.listImage || req.body.img)) || templateData.thumbnail || '';
+    const listDesc = (req.body && (req.body.listDesc || req.body.desc)) || templateData.description || '';
+    const pagesArr = Array.isArray(templateData.pages) ? templateData.pages : [];
+    const uniqueBase = (templateData.name && String(templateData.name).trim())
+      || (templatePath && !templatePath.startsWith('http') ? path.parse(templatePath).name : '')
       || `imported-${Date.now()}`;
-    saveTemplateToDb(baseName, templateData);
+    const safeBase = String(uniqueBase).replace(/[^a-z0-9_\-. ]/gi, '_');
+    const fileName = `${safeBase}-${Date.now()}.json`;
+    const importedDir = path.join(__dirname, './json/imported-templates');
+    ensureDirExists(importedDir);
+    const outPath = path.join(importedDir, fileName);
+    const listItem = {
+      img: listImg,
+      data: JSON.stringify(pagesArr),
+      desc: listDesc,
+      pages: pagesArr.length,
+    };
+    try {
+      fs.writeFileSync(outPath, JSON.stringify(listItem, null, 2), 'utf8');
+    } catch (e) {
+      console.error('Failed to write list-item JSON:', e);
+    }
 
     res.json({
       success: true,
       template: templateData,
-      pathUrl: `/api/template/${encodeURIComponent(baseName)}.json`,
-      downloadUrl: `/api/template/download/${encodeURIComponent(baseName)}`
+      pathUrl: `/api/template/${encodeURIComponent('imported-templates/' + fileName)}`,
+      downloadUrl: `/api/template/download/${encodeURIComponent('imported-templates/' + fileName)}`
     });
   } catch (error) {
     console.error('Template import error:', error);
@@ -525,8 +627,8 @@ app.get('/api/template/:templateName', async (req, res) => {
       }
     }
 
-    // Normalize response to a full template object
-    const responseTemplate = Array.isArray(templateData)
+    // Normalize to an object with pages
+    let normalized = Array.isArray(templateData)
       ? {
           name: templateName,
           description: '',
@@ -536,7 +638,98 @@ app.get('/api/template/:templateName', async (req, res) => {
         }
       : templateData;
 
-    res.json({ success: true, template: responseTemplate });
+    // Optionally apply text/image parameters from query
+    const qp = req.query || {};
+    const parseMaybeJson = (v) => {
+      if (v == null) return null;
+      if (typeof v !== 'string') return v;
+      try { return JSON.parse(v); } catch (_) { return null; }
+    };
+    const textParameters = parseMaybeJson(qp.textParams) || parseMaybeJson(qp.textParameters) || {};
+    const imageParameters = parseMaybeJson(qp.imageParams) || parseMaybeJson(qp.imageParameters) || {};
+    const hasTextParams = textParameters && Object.keys(textParameters).length > 0;
+    const hasImageParams = imageParameters && Object.keys(imageParameters).length > 0;
+
+    if (normalized && Array.isArray(normalized.pages) && (hasTextParams || hasImageParams)) {
+      const textKeys = Object.keys(textParameters || {});
+      const imageKeys = Object.keys(imageParameters || {});
+      normalized.pages = normalized.pages.map((page) => {
+        const updatedPage = { ...page };
+        const layers = { ...(updatedPage.layers || {}) };
+        Object.keys(layers).forEach((layerId) => {
+          const layer = layers[layerId];
+          if (!layer || !layer.type || !layer.props) return;
+
+          if (hasTextParams && layer.type === 'TextLayer') {
+            let newText = layer.props.text || '';
+            if (textParameters[layerId]) {
+              newText = textParameters[layerId];
+            } else if (typeof newText === 'string' && textKeys.length > 0) {
+              textKeys.forEach((ph) => {
+                const val = textParameters[ph];
+                if (typeof val !== 'string') return;
+                try {
+                  const regex = new RegExp(`\\{\\{${ph}\\}\\}`, 'g');
+                  newText = newText.replace(regex, val);
+                } catch (_) {}
+              });
+            }
+            layers[layerId] = { ...layer, props: { ...layer.props, text: newText } };
+          }
+
+          if (hasImageParams && layer.type === 'ImageLayer' && layer.props.image) {
+            let newImageUrl = layer.props.image.url || layer.props.image.thumb || '';
+            if (imageParameters[layerId]) {
+              newImageUrl = imageParameters[layerId];
+            } else if (imageKeys.length > 0 && typeof newImageUrl === 'string') {
+              imageKeys.forEach((ph) => {
+                const val = imageParameters[ph];
+                if (typeof val !== 'string') return;
+                if (newImageUrl.includes(ph)) {
+                  newImageUrl = val;
+                }
+              });
+            }
+            layers[layerId] = {
+              ...layer,
+              props: { ...layer.props, image: { ...layer.props.image, url: newImageUrl, thumb: newImageUrl } },
+            };
+          }
+        });
+        updatedPage.layers = layers;
+        return updatedPage;
+      });
+    }
+
+    // Optionally append to templates.json if requested
+    const append = String(qp.append || '').toLowerCase();
+    if (append === '1' || append === 'true' || append === 'yes') {
+      try {
+        const filePath = path.join(__dirname, './json/templates.json');
+        let jsonObj = { data: [] };
+        try {
+          const raw = fs.readFileSync(filePath, 'utf8');
+          jsonObj = JSON.parse(raw);
+          if (!Array.isArray(jsonObj.data)) jsonObj.data = [];
+        } catch (_) {
+          jsonObj = { data: [] };
+        }
+        const listImage = qp.listImage || '';
+        const listDesc = qp.listDesc || '';
+        const item = {
+          img: String(listImage || ''),
+          data: JSON.stringify(normalized.pages || []),
+          desc: String(listDesc || ''),
+          pages: Array.isArray(normalized.pages) ? normalized.pages.length : 0,
+        };
+        jsonObj.data.unshift(item);
+        fs.writeFileSync(filePath, JSON.stringify(jsonObj, null, 2), 'utf8');
+      } catch (e) {
+        console.warn('GET /api/template append failed:', e);
+      }
+    }
+
+    res.json({ success: true, template: normalized });
   } catch (error) {
     console.error('Get template error:', error);
     res.status(500).json({ error: 'Failed to get template' });
